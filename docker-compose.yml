@@ -10,10 +10,15 @@ services:
     volumes:
       - 'mariadb_data:/bitnami'
   drupal:
-    # This file is identical to the bitnami-docker-drupal one, except for this
-    # build line instead of "image: 'bitnami/drupal:latest'".
+    # This file is identical to the bitnami-docker-drupal one, except for
+    # "build" instead of "image".
     build:
       context: .
+      args:
+        # Can be 8.5.6, 8.6.0-alpha1, 8.7.x-dev, etc.
+        # See https://www.drupal.org/project/drupal/releases?api_version%5B%5D=7234
+        # for valid release semver.
+        DRUPAL_VERSION: 8.5.6
     labels:
       kompose.service.type: nodeport
     environment:

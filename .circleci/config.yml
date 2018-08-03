@@ -1,0 +1,46 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: docker
+    steps:
+      - run: |
+          # We extract the Drupal core version so that we can create rolling
+          # release tags (DRUPAL_VERSION-r0, DRUPAL_VERSION-r1, etc).
+          # Since we prefer to run an alpine docker image, we can't use the
+          # standard CircleCI method to reuse this dynamic variable.
+          # As a workaround, we could run this code in each step, but in case
+          # we have more dynamic vars to add in the future we prefer to stash
+          # this in BASH_ENV, and then require each step to source it (note
+          # `apk install bash` does not automatically source BASH_ENV).
+          # See https://discuss.circleci.com/t/sourcing-bash-env-in-an-alpine-docker-image/20084
+          # See https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables
+          DRUPAL_VERSION=`echo "$CIRCLE_TAG" | sed 's/\(\S*\)-r[0-9]/\1/' -`
+          echo 'export DRUPAL_VERSION='"$DRUPAL_VERSION" >> $BASH_ENV
+          REPO=`echo $CIRCLE_PROJECT_REPONAME | cut -d/ -f2`
+          echo 'export REPO='"$REPO" >> $BASH_ENV
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run: |
+          source $BASH_ENV
+          docker build \
+            --build-arg DRUPAL_VERSION=$DRUPAL_VERSION \
+            --tag $DOCKER_USER/$REPO:$DRUPAL_VERSION \
+            --tag $DOCKER_USER/$REPO:$CIRCLE_TAG .
+      - run: |
+          source $BASH_ENV
+          docker login -u $DOCKER_USER -p $DOCKER_PASS
+          docker push $DOCKER_USER/$REPO:$DRUPAL_VERSION
+          docker push $DOCKER_USER/$REPO:$CIRCLE_TAG
+
+workflows:
+  version: 2
+  push-image-tag:
+    jobs:
+      - build:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /.*-r[0-9]/

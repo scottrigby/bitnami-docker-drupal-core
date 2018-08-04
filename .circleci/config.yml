@@ -1,3 +1,10 @@
+# To-do: Automate pushing new tags whenever Drupal core makes new releases
+# available (via Drupal's project API).
+# To-do: Add nightly snapshots of Drupal 8 MINOR dev releases (8.5.x-dev,
+# 8.6.x-dev, 8.7.x-dev, etc). I'm thinking if we do versioned image release tags
+# they should follow "DRUPAL_VERSION-rDATE" instead of "DRUPAL_VERSION-rN"
+# pattern, and there should be some cleanup (keep last week of snapshots).
+# Otherwise only keep short, mutable git and image tags for dev snapshots.
 version: 2
 jobs:
   build:
@@ -52,6 +59,14 @@ jobs:
       - run: |
           source ${BASH_ENV}
           docker push ${DOCKER_USER}/${REPO}
+      - run: |
+          # Call microbadger's webhook when this image is pushed and they'll
+          # update the metadata.
+          # To-do: Automate adding tag info and badges to the README when
+          # pushing new tags.
+          # See https://microbadger.com/images/r6by/bitnami-drupal-core
+          apk add --update curl && rm -rf /var/cache/apk/*
+          curl -X POST https://hooks.microbadger.com/images/r6by/bitnami-drupal-core/fwktOPTMRU7uSNDV0VNa6_LD7_o=
 
 workflows:
   version: 2

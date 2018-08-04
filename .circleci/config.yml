@@ -2,9 +2,10 @@ version: 2
 jobs:
   build:
     docker:
-      - image: docker:git
+      - image: docker:18.06.0-ce-git
     steps:
       - run: |
+          set -euo pipefail
           # We extract the Drupal core version so that we can create rolling
           # release tags (DRUPAL_VERSION-r0, DRUPAL_VERSION-r1, etc).
           # Since we prefer to run an alpine docker image, we can't use the
@@ -22,14 +23,16 @@ jobs:
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
-      - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+      - run: docker login --username "${DOCKER_USER}" --password "${DOCKER_PASS}"
       - run: |
+          set -euo pipefail
           source $BASH_ENV
           docker build \
             --build-arg DRUPAL_VERSION=$DRUPAL_VERSION \
             --tag $DOCKER_USER/$REPO:$DRUPAL_VERSION \
             --tag $DOCKER_USER/$REPO:$CIRCLE_TAG .
       - run: |
+          set -euo pipefail
           source $BASH_ENV
           docker push $DOCKER_USER/$REPO:$DRUPAL_VERSION
           docker push $DOCKER_USER/$REPO:$CIRCLE_TAG

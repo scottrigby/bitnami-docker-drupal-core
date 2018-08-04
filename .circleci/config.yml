@@ -33,6 +33,21 @@ jobs:
           source ${BASH_ENV}
           docker push ${DOCKER_USER}/${REPO}:${DRUPAL_VERSION}
           docker push ${DOCKER_USER}/${REPO}:${CIRCLE_TAG}
+  build-latest:
+    docker:
+      - image: docker:git
+    steps:
+      - run: |
+          # No need to pass DRUPAL_VERSION because we set latest stable version
+          # as default in the Dockerfile. No need for tag, since we want latest.
+          REPO=`echo ${CIRCLE_PROJECT_REPONAME} | cut -d/ -f2`
+          echo export REPO=${REPO} >> ${BASH_ENV}
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+      - run: docker build -t ${DOCKER_USER}/${REPO} .
+      - run: docker push ${DOCKER_USER}/${REPO}
 
 workflows:
   version: 2
@@ -44,3 +59,11 @@ workflows:
               ignore: /.*/
             tags:
               only: /.*-r[0-9]/
+  # This is mainly for the status badge. At least until tags are supported.
+  # See https://discuss.circleci.com/t/status-badge-for-tags/19510
+  push-latest:
+    jobs:
+      - build-latest:
+          filters:
+            branches:
+              only: master

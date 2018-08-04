@@ -46,8 +46,12 @@ jobs:
       - setup_remote_docker:
           docker_layer_caching: true
       - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
-      - run: docker build -t ${DOCKER_USER}/${REPO} .
-      - run: docker push ${DOCKER_USER}/${REPO}
+      - run: |
+          source ${BASH_ENV}
+          docker build -t ${DOCKER_USER}/${REPO} .
+      - run: |
+          source ${BASH_ENV}
+          docker push ${DOCKER_USER}/${REPO}
 
 workflows:
   version: 2

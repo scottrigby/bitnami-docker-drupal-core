@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: docker
+      - image: docker:git
     steps:
       - run: |
           # We extract the Drupal core version so that we can create rolling

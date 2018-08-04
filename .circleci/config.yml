@@ -15,24 +15,24 @@ jobs:
           # `apk install bash` does not automatically source BASH_ENV).
           # See https://discuss.circleci.com/t/sourcing-bash-env-in-an-alpine-docker-image/20084
           # See https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables
-          DRUPAL_VERSION=`echo "$CIRCLE_TAG" | sed 's/\(\S*\)-r[0-9]/\1/' -`
-          echo 'export DRUPAL_VERSION='"$DRUPAL_VERSION" >> $BASH_ENV
-          REPO=`echo $CIRCLE_PROJECT_REPONAME | cut -d/ -f2`
-          echo 'export REPO='"$REPO" >> $BASH_ENV
+          DRUPAL_VERSION=`echo ${CIRCLE_TAG} | sed 's/\(\S*\)-r[0-9]/\1/' -`
+          echo export DRUPAL_VERSION=${DRUPAL_VERSION} >> ${BASH_ENV}
+          REPO=`echo ${CIRCLE_PROJECT_REPONAME} | cut -d/ -f2`
+          echo export REPO=${REPO} >> ${BASH_ENV}
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
       - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
       - run: |
-          source $BASH_ENV
+          source ${BASH_ENV}
           docker build \
-            --build-arg DRUPAL_VERSION=$DRUPAL_VERSION \
-            --tag $DOCKER_USER/$REPO:$DRUPAL_VERSION \
-            --tag $DOCKER_USER/$REPO:$CIRCLE_TAG .
+            --build-arg DRUPAL_VERSION=${DRUPAL_VERSION} \
+            --tag ${DOCKER_USER}/${REPO}:${DRUPAL_VERSION} \
+            --tag ${DOCKER_USER}/${REPO}:${CIRCLE_TAG} .
       - run: |
-          source $BASH_ENV
-          docker push $DOCKER_USER/$REPO:$DRUPAL_VERSION
-          docker push $DOCKER_USER/$REPO:$CIRCLE_TAG
+          source ${BASH_ENV}
+          docker push ${DOCKER_USER}/${REPO}:${DRUPAL_VERSION}
+          docker push ${DOCKER_USER}/${REPO}:${CIRCLE_TAG}
 
 workflows:
   version: 2

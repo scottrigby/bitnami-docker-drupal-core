@@ -4,6 +4,9 @@
 - [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.6.0-beta1.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.6.0-beta1) [`8.6.0-beta1`, `8.6.0-beta1-r0` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
 - [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.6.0-alpha1.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.6.0-alpha1) [`8.6.0-alpha1`, `8.6.0-alpha1-r5` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
 - [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.5.6.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.5.6) [`8.5.6`, `8.5.6-r0`, `latest` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
+- [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.7.x-dev.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.5.6) [`8.7.x-dev` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
+- [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.6.x-dev.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.5.6) [`8.6.x-dev` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
+- [![](https://images.microbadger.com/badges/image/r6by/bitnami-drupal-core:8.5.x-dev.svg)](https://microbadger.com/images/r6by/bitnami-drupal-core:8.5.6) [`8.5.x-dev` (Dockerfile)](https://github.com/scottrigby/bitnami-drupal-core/blob/master/Dockerfile)
 
 # What is Bitnami Drupal Core?
 

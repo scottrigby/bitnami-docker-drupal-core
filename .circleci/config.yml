@@ -6,83 +6,174 @@
 # pattern, and there should be some cleanup (keep last week of snapshots).
 # Otherwise only keep short, mutable git and image tags for dev snapshots.
 version: 2
-jobs:
-  build:
+
+references:
+
+  container_config: &container_config
+    working_directory: /tmp
     docker:
       - image: docker:git
+
+  workspace_root: &workspace_root
+    /tmp/workspace
+
+  persist_to_workspace: &persist_to_workspace
+    persist_to_workspace:
+      root: workspace
+      paths:
+        - env
+
+  attach_workspace: &attach_workspace
+    attach_workspace:
+      at: *workspace_root
+
+jobs:
+  # Revision tags allow us to increment fixes that share a common image with
+  # rolling short tags (each incrementing DRUPAL_VERSION-r0, DRUPAL_VERSION-r1,
+  # etc updates the reference for the short DRUPAL_VERSION tag).
+  build-push-revision-tag:
+    <<: *container_config
     steps:
       - run: |
-          # We extract the Drupal core version so that we can create rolling
-          # release tags (DRUPAL_VERSION-r0, DRUPAL_VERSION-r1, etc).
-          # Since we prefer to run an alpine docker image, we can't use the
-          # standard CircleCI method to reuse this dynamic variable.
-          # As a workaround, we could run this code in each step, but in case
-          # we have more dynamic vars to add in the future we prefer to stash
-          # this in BASH_ENV, and then require each step to source it (note
-          # `apk install bash` does not automatically source BASH_ENV).
-          # See https://discuss.circleci.com/t/sourcing-bash-env-in-an-alpine-docker-image/20084
-          # See https://circleci.com/docs/2.0/env-vars/#using-bash_env-to-set-environment-variables
+          # We extract the Drupal core version from our revision tag in order to
+          # set the Docker build-arg so that our Dockerfile will download and
+          # package the correct Drupal core release tarball.
           DRUPAL_VERSION=`echo ${CIRCLE_TAG} | sed 's/\(\S*\)-r[0-9]/\1/' -`
-          echo export DRUPAL_VERSION=${DRUPAL_VERSION} >> ${BASH_ENV}
+          # We want to reuse these variables across jobs, so we persist an env
+          # file to the workspace.
+          # See https://circleci.com/docs/2.0/workflows/#using-workspaces-to-share-data-among-jobs
+          echo export DRUPAL_VERSION=${DRUPAL_VERSION} >> workspace/env
+      - run: |
           REPO=`echo ${CIRCLE_PROJECT_REPONAME} | cut -d/ -f2`
-          echo export REPO=${REPO} >> ${BASH_ENV}
+          echo export REPO=${REPO} >> workspace/env
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
       - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
       - run: |
-          source ${BASH_ENV}
+          source workspace/env
           docker build \
             --build-arg DRUPAL_VERSION=${DRUPAL_VERSION} \
-            --tag ${DOCKER_USER}/${REPO}:${DRUPAL_VERSION} \
             --tag ${DOCKER_USER}/${REPO}:${CIRCLE_TAG} .
-      - run: |
-          source ${BASH_ENV}
-          docker push ${DOCKER_USER}/${REPO}:${DRUPAL_VERSION}
           docker push ${DOCKER_USER}/${REPO}:${CIRCLE_TAG}
-  build-latest:
-    docker:
-      - image: docker:git
+      - *persist_to_workspace
+  test-version:
+    <<: *container_config
     steps:
+      - *attach_workspace
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run: |
-          # No need to pass DRUPAL_VERSION because we set latest stable version
-          # as default in the Dockerfile. No need for tag, since we want latest.
-          REPO=`echo ${CIRCLE_PROJECT_REPONAME} | cut -d/ -f2`
-          echo export REPO=${REPO} >> ${BASH_ENV}
-      - checkout
+          apk add --update --no-cache python py-pip curl
+          pip install --no-cache-dir docker-compose
+          docker-compose --version
+      - run: |
+          source workspace/env
+          curl -sSL https://raw.githubusercontent.com/bitnami/bitnami-docker-drupal/master/docker-compose.yml > docker-compose.yml \
+          sed -i 's/bitnami\/drupal:latest/r6by\/bitnami-drupal-core:${DRUPAL_VERSION}/g' docker-compose.yml \
+          docker-compose up -d
+      - run: |
+          docker exec -t default_drupal_1 bash -c " \
+            until [ -f /bitnami/drupal/.initialized ]; do \
+              echo Drupal is initializing...; \
+              sleep 5; \
+            done; \
+            echo Drupal has been initialized."
+      - run: |
+          source workspace/env
+          # Use drush to ensure installed version. Alternatively, we could
+          # grep /opt/bitnami/drupal/core/lib/Drupal.php for "const VERSION",
+          # but this test ensures Drupal still fully installs correctly.
+          INSTALLED_VERSION=$(docker exec -t default_drupal_1 bash -c "drush -r /opt/bitnami/drupal st | grep 'Drupal version' | cut -d' ' -f7")
+          # For Drupal "-dev" packages, the "x" is substituted with an integer in the PHP
+          # "Drupal::VERSION" constant (where drush draws it's version string). The
+          # integer is not always consistent (examples: "8.7.x-dev" and "8.6.x-dev"
+          # replace "x" with "0", but "8.5.x-dev" becomes "8.5.7-dev").
+          # There is only ever one dev package per MINOR version, so check against
+          # "MAJOR.MINOR.[0-9]-dev" pattern.
+          REGEX=${DRUPAL_VERSION/x/[0-9]}
+          INSTALLED_VERSION=${INSTALLED_VERSION/0-dev/x-dev}
+          if [[ $INSTALLED_VERSION =~ ^$REGEX$ ]]; then
+              echo "Drupal version ${DRUPAL_VERSION} was successfully installed."
+          else
+              echo "Drupal version ${DRUPAL_VERSION} was not successfully installed. Got ${INSTALLED_VERSION}."
+              exit 1
+          fi
+  # See build-push-revision-tag job comments above.
+  pull-revision-tag-push-short-tag:
+    <<: *container_config
+    steps:
+      - *attach_workspace
       - setup_remote_docker:
           docker_layer_caching: true
       - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
       - run: |
-          source ${BASH_ENV}
-          docker build -t ${DOCKER_USER}/${REPO} .
+          source workspace/env
+          REVISION=${DOCKER_USER}/${REPO}:${CIRCLE_TAG}
+          SHORT=${DOCKER_USER}/${REPO}:${DRUPAL_VERSION}
+          docker pull ${REVISION}
+          docker tag ${REVISION} ${SHORT}
+          docker push ${SHORT}
+  update-microbadger:
+    docker:
+      - image: alpine
+    steps:
       - run: |
-          source ${BASH_ENV}
-          docker push ${DOCKER_USER}/${REPO}
+          apk add --update --no-cache curl
       - run: |
           # Call microbadger's webhook when this image is pushed and they'll
           # update the metadata.
           # To-do: Automate adding tag info and badges to the README when
           # pushing new tags.
           # See https://microbadger.com/images/r6by/bitnami-drupal-core
-          apk add --update curl && rm -rf /var/cache/apk/*
           curl -X POST https://hooks.microbadger.com/images/r6by/bitnami-drupal-core/fwktOPTMRU7uSNDV0VNa6_LD7_o=
+
+
+
+  build-push-latest:
+    <<: *container_config
+    steps:
+      - run: |
+          REPO=`echo ${CIRCLE_PROJECT_REPONAME} | cut -d/ -f2`
+          echo export DRUPAL_VERSION=${DRUPAL_VERSION} >> workspace/env
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run: docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+      - run: |
+          source workspace/env
+          docker build -t ${DOCKER_USER}/${REPO} .
+      - run: |
+          source workspace/env
+          docker push ${DOCKER_USER}/${REPO}
+      - *persist_to_workspace
+
+
 
 workflows:
   version: 2
-  push-image-tag:
+  build-test-push-tag:
     jobs:
-      - build:
+      - build-push-revision-tag:
           filters:
             branches:
               ignore: /.*/
             tags:
               only: /.*-r[0-9]/
+      - test-version:
+          requires:
+            - build-push-revision-tag
+      - pull-revision-tag-push-short-tag:
+          requires:
+            - test-version
+      - update-microbadger:
+          requires:
+            - pull-revision-tag-push-short-tag
   # This is mainly for the status badge. At least until tags are supported.
   # See https://discuss.circleci.com/t/status-badge-for-tags/19510
-  push-latest:
+  build-push-latest:
     jobs:
-      - build-latest:
+      - build-push-latest:
           filters:
             branches:
               only: master
